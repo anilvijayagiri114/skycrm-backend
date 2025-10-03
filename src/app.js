@@ -71,15 +71,15 @@ app.use('/api/*', (req, res) => {
 });
 
 // Serve static files in production
-if (process.env.NODE_ENV === 'production') {
-  // Serve static files from frontend build
-  app.use(express.static(path.join(__dirname, '../../skycrm-frontend/dist')));
+// if (process.env.NODE_ENV === 'production') {
+//   // Serve static files from frontend build
+//   app.use(express.static(path.join(__dirname, '../../skycrm-frontend/dist')));
   
-  // Handle SPA routing - send all non-api requests to index.html
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../../skycrm-frontend/dist/index.html'));
-  });
-}
+//   // Handle SPA routing - send all non-api requests to index.html
+//   app.get('*', (req, res) => {
+//     res.sendFile(path.join(__dirname, '../../skycrm-frontend/dist/index.html'));
+//   });
+// }
 
 // Error handler
 app.use((err, req, res, next) => {
