@@ -41,7 +41,7 @@ const createApp = () => {
   // CORS
   app.use(cors({
     origin: process.env.NODE_ENV === 'production' 
-      ? process.env.CORS_ORIGIN 
+      ? process.env.CORS_ORIGIN || "https://skycrm-frontend-1.onrender.com"
       : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'],
     credentials: true,
     methods: ['GET','POST','PUT','DELETE','PATCH','OPTIONS'],
@@ -77,12 +77,12 @@ const createApp = () => {
   app.use('/api/*', (req, res) => res.status(404).json({ error: 'API endpoint not found' }));
 
   // Serve frontend in production
-  if (process.env.NODE_ENV === 'production') {
-    app.use(express.static(path.join(__dirname, '../../skycrm-frontend/dist')));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(__dirname, '../../skycrm-frontend/dist/index.html'));
-    });
-  }
+  // if (process.env.NODE_ENV === 'production') {
+  //   app.use(express.static(path.join(__dirname, '../../skycrm-frontend/dist')));
+  //   app.get('*', (req, res) => {
+  //     res.sendFile(path.join(__dirname, '../../skycrm-frontend/dist/index.html'));
+  //   });
+  // }
 
   // Error handler
   app.use((err, req, res, next) => {
