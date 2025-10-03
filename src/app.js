@@ -73,11 +73,11 @@ app.use('/api/*', (req, res) => {
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
   // Serve static files from frontend build
-  app.use(express.static(path.join(__dirname, '../../frontend/dist')));
+  app.use(express.static(path.join(__dirname, '../../skycrm-frontend-main/dist')));
   
   // Handle SPA routing - send all non-api requests to index.html
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
+    res.sendFile(path.join(__dirname, '../../skycrm-frontend-main/dist/index.html'));
   });
 }
 
