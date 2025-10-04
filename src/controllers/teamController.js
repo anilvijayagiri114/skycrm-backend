@@ -173,6 +173,7 @@ import User from "../models/User.js";
 import Role from "../models/Role.js";
 
 export const createTeam = async (req, res) => {
+  req.shouldLog = true;
   const { name, leadId, memberIds } = req.body;
   const team = await Team.create({
     name,
@@ -181,11 +182,27 @@ export const createTeam = async (req, res) => {
     members: memberIds || [],
   });
   // Populate members, lead, and manager for instant UI update
-  const populatedTeam = await Team.findById(team._id)
-    .populate("lead", "name email")
-    .populate("manager", "name email")
-    .populate("members", "name email");
-  res.status(201).json(populatedTeam);
+  try {
+    const team = await Team.create({
+      name,
+      manager: req.user.userId,
+      lead: leadId || undefined,
+      members: memberIds || [],
+    });
+    // Populate members, lead, and manager for instant UI update
+    const populatedTeam = await Team.findById(team._id)
+      .populate("lead", "name email")
+      .populate("manager", "name email")
+      .populate("members", "name email");
+    res.status(201).json({
+      populatedTeam,
+      message: "Team: " + name + " created successfully",
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: "Team: " + name + " creation failed",
+    });
+  }
 };
 
 // export const getTeams = async (filter) => {
@@ -272,18 +289,28 @@ export const listTeams = async (req, res) => {
 };
 
 export const addMembers = async (req, res) => {
+  req.shouldLog = true;
   const { id } = req.params;
   const { memberIds } = req.body;
   const team = await Team.findByIdAndUpdate(
     id,
     { $addToSet: { members: { $each: memberIds || [] } } },
     { new: true }
-  );
-  if (!team) return res.status(404).json({ error: "Team not found" });
-  res.json(team);
+  ).populate({ path: "members", select: "name email" });
+  if (!team) {
+    return res
+      .status(404)
+      .json({ error: "Team with id " + id + " not found to add team members" });
+  }
+  const membersList = team.members.map((m) => m.name).join(", ");
+  res.json({
+    team,
+    message: `Team:${team.name} is added with ${memberIds.length} members. Team members are: ${membersList}`,
+  });
 };
 
 export const setLead = async (req, res) => {
+  req.shouldLog = true;
   const { id } = req.params;
   const { leadId, currentLeadId } = req.body;
 
@@ -291,8 +318,11 @@ export const setLead = async (req, res) => {
     id,
     { lead: leadId },
     { new: true }
-  );
-  if (!team) return res.status(404).json({ error: "Team not found" });
+  ).populate({ path: "lead", select: "name email" });
+  if (!team)
+    return res
+      .status(404)
+      .json({ error: "Team with id " + id + " not found to set team lead" });
 
   const roleLead = await Role.findOne({ name: "Sales Team Lead" });
   if (!roleLead) return res.status(404).json({ error: "Role not found" });
@@ -315,17 +345,24 @@ export const setLead = async (req, res) => {
   );
   if (!user) return res.status(404).json({ error: "User not found" });
 
-  res.json(team);
+  res.json({
+    team,
+    message:
+      "Team: " + team.name + " is set with a new team lead " + team.lead.name,
+  });
 };
 
 export const deleteTeam = async (req, res) => {
+  req.shouldLog = true;
   try {
     const { id } = req.params;
 
     const deletedTeam = await Team.findByIdAndDelete(id);
 
     if (!deletedTeam) {
-      return res.status(404).json({ error: "Team not found" });
+      return res
+        .status(404)
+        .json({ error: "Team with id:" + id + " not found" });
     }
 
     if (deletedTeam.lead) {
@@ -339,50 +376,53 @@ export const deleteTeam = async (req, res) => {
       }
     }
 
-    res.json({ message: "Team deleted successfully", deletedTeam });
+    res.json({
+      message: "Team: " + deletedTeam.name + " deleted successfully",
+      deletedTeam,
+    });
   } catch (error) {
     res.status(500).json({ error: "Server error", details: error.message });
   }
 };
 
 export const editTeam = async (req, res) => {
+  req.shouldLog = true;
   try {
     const teamId = req.params.id;
     const { name, memberIds } = req.body;
-
     const currentTeam = await Team.findById(teamId).populate({
       path: "members",
       populate: { path: "role" },
     });
-
     if (!currentTeam) {
-      return res.status(404).json({ error: "Team not found" });
+      return res
+        .status(404)
+        .json({ error: "Team with id " + teamId + " not found" });
     }
-
     const teamLead = currentTeam.members.find(
       (member) => member.role?.name === "Sales Team Lead"
     );
-
     if (teamLead) {
       const salesRepRole = await Role.findOne({
         name: "Sales Representatives",
       });
       await User.findByIdAndUpdate(teamLead._id, { role: salesRepRole._id });
     }
-
     const updatedTeam = await Team.findByIdAndUpdate(
       teamId,
       { $set: { name, members: memberIds }, $unset: { lead: "" } },
       { new: true }
-    );
-
+    ).populate({ path: "members", select: "name email" });
+    const membersList = updatedTeam.members.map((m) => m.name).join(", ");
     res.status(200).json({
-      message: "Team updated successfully",
+      message: `Team: ${currentTeam.name} updated successfully. Updated team details: Team name: ${updatedTeam.name}, Team members: ${membersList}`,
       updatedTeam,
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Server error", details: error.message });
+    res
+      .status(500)
+      .json({ error: "Server error. Error: " + error, details: error.message });
   }
 };
 
@@ -391,7 +431,6 @@ export const getTeamDetailsForLead = async (req, res) => {
     const userId = req.user.userId;
     const role = req.user.roleName;
     let teamQuery = {};
-
     // If admin is viewing, use the teamId from query params
     if (role === "Admin") {
       const { teamId } = req.query;
@@ -411,10 +450,10 @@ export const getTeamDetailsForLead = async (req, res) => {
       teamQuery = { lead: userId };
     } else {
       return res.status(403).json({
-        message: "Forbidden: Only Admin or Sales Team Lead can access this resource.",
+        message:
+          "Forbidden: Only Admin or Sales Team Lead can access this resource.",
       });
     }
-
     const team = await Team.findOne(teamQuery)
       .populate("lead", "name email")
       .populate("manager", "name email")
@@ -424,7 +463,6 @@ export const getTeamDetailsForLead = async (req, res) => {
     if (!team) {
       return res.status(404).json({ message: "No team found." });
     }
-
     res.json(team);
   } catch (err) {
     console.error("Error fetching team details:", err);
