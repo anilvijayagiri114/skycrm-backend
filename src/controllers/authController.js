@@ -112,10 +112,12 @@ export const register = async (req, res) => {
   });
   if (user) {
     try {
-      await sendEmail(email, 'registration', { 
+      const res = await sendEmail(email, 'registration', { 
         name, 
         tempPassword 
       });
+
+      console.log("Nodemailer result"+res);
       
       return res.status(201).json({ 
         id: user._id, 
