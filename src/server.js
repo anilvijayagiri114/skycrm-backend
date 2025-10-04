@@ -17,6 +17,7 @@ import teamRoutes from './routes/team.js';
 import statsRoutes from './routes/stats.js';
 import { ensureDefaultAdmin } from './utils/setupDefaultUser.js';
 import { initSocket } from './serverSocket.js';
+import { loggerMiddleware } from './middleware/loggerMiddleware.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,6 +29,7 @@ const createApp = () => {
 
   // Security middlewares
   app.use(helmet());
+  app.use(loggerMiddleware);
 
   // Rate limiting (only auth routes)
   const limiter = rateLimit({
