@@ -149,7 +149,11 @@ export const changeStatus = async (req, res) => {
   console.log('changeStatus called by user:', req.user);
   const { statusName, note } = req.body;
   const lead = await Lead.findById(req.params.id);
-  if (!lead) return res.status(404).json({ error: 'Lead not found' });
+  if (!lead){
+    return res
+      .status(404)
+      .json({ error: "Lead with given id not found", target: req.params.id });
+  }
   // permission: allow Admin, Sales Head, Sales Head Manager, Sales Team Lead, Sales Representative
   const role = req.user.roleName;
   if (!['Admin','Sales Manager','Sales Team Lead','Sales Representatives'].includes(role)) {
@@ -205,7 +209,10 @@ export const uploadAttachment = async (req, res) => {
     fileName: req.file.originalname,
     uploadedBy: req.user.userId
   });
-  res.status(201).json(doc);
+  res.status(201).json({
+    doc,
+    message: "Attachment" + req.file.originalname + " uploaded successfully",
+  });
 };
 
 export const importLeads = async (req, res) => {
