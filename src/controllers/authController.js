@@ -7,7 +7,7 @@ import Team from "../models/Team.js";
 import { getTeams } from "./teamController.js";
 import crypto from "crypto";
 import { getIO } from "../serverSocket.js";
-import transporter, { sendEmail } from "../MailTransporter.js";
+import { sendEmail } from "../MailTransporter.js";
 
 const signToken = (user) => {
   return jwt.sign(
