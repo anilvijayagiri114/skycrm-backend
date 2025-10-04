@@ -133,12 +133,12 @@ export const updateLead = async (req, res) => {
   res.json({
     lead,
     message: `Lead ${lead.email} updated successfully. Updated details: 
-    Name: ${lead.name}
-    Phone: ${lead.phone}
-    City: ${lead.city}
-    Source: ${lead.source}
-    Status: ${lead.status}
-    Assigned to: ${lead.assignedTo?.name || "Not Assigned"}
+    Name: ${lead?.name}, 
+    Phone: ${lead?.phone}, 
+    City: ${lead?.city}, 
+    Source: ${lead?.source},
+    Status: ${lead?.status},
+    Assigned to: ${lead.assignedTo?.name || "Not Assigned"},
     Team: ${lead.teamId?.name || "No Team"}`,
     target: lead.email,
   });
