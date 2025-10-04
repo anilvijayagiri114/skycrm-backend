@@ -511,7 +511,7 @@ export const updateUserDetails = async (req, res) => {
     const teams = await checkRoleAndUpdateDetails(user, roleName, status, req);
 
     req.logInfo = {
-      message: `User updated with ${updatedUser.name}, ${updatedUser.email}, ${updatedUser.status}, ${updatedUser.phone}`,
+      message: `User updated. Details : ${updatedUser.name}, ${updatedUser.email}, ${updatedUser.status}, ${updatedUser?.phone}`,
       target: email,
     };
 
