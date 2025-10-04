@@ -481,8 +481,8 @@ export const getUserDetails = async (req, res) => {
 // };
 
 export const updateUserDetails = async (req, res) => {
+  const { user } = req.body;
   try {
-    const { user } = req.body;
     if (!user || !user._id) {
       return res.status(400).json({ error: "User ID is required" });
     }
@@ -618,8 +618,8 @@ const checkRoleAndUpdateDetails = async (user, roleName, status) => {
 };
 
 export const deleteUser = async (req, res) => {
+  const { user } = req.body;
   try {
-    const { user } = req.body;
     if (!user || !user._id) {
       return res.status(400).json({ error: "User ID is required" });
     }
