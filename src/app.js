@@ -13,6 +13,7 @@ import statusRoutes from './routes/statuses.js';
 import leadRoutes from './routes/leads.js';
 import teamRoutes from './routes/team.js';
 import statsRoutes from './routes/stats.js';
+import { loggerMiddleware } from './middleware/loggerMiddleware.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,6 +22,7 @@ const app = express();
 
 // Security middlewares
 app.use(helmet());
+app.use(loggerMiddleware);
 
 // Rate limiting
 const limiter = rateLimit({
