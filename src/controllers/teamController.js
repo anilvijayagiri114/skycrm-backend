@@ -175,12 +175,6 @@ import Role from "../models/Role.js";
 export const createTeam = async (req, res) => {
   req.shouldLog = true;
   const { name, leadId, memberIds } = req.body;
-  const team = await Team.create({
-    name,
-    manager: req.user.userId,
-    lead: leadId || undefined,
-    members: memberIds || [],
-  });
   // Populate members, lead, and manager for instant UI update
   try {
     const team = await Team.create({
