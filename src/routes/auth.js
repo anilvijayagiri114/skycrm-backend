@@ -5,6 +5,7 @@ import { resetPassword } from '../controllers/authController.js';
 import { Router } from 'express';
 import { login, register, listUsers, getUserDetails, getUsersByRole, updateUserDetails, changePassword, sendRecoveryEmail, logout, deleteUser } from '../controllers/authController.js';
 import { authRequired, permit } from '../middleware/auth.js';
+import { listLogs } from '../controllers/logController.js';
 
 // ...existing code...
 
@@ -22,4 +23,5 @@ router.post('/usersByRole', authRequired, permit('Admin'), getUsersByRole);
 router.post('/getUserDetails', authRequired, permit('Admin'), getUserDetails);
 router.put('/updateUser', authRequired, permit('Admin'), updateUserDetails);
 router.delete('/deleteUser', authRequired, permit('Admin'), deleteUser);
+router.get('/logs',authRequired, permit('Admin','Sales Manager'), listLogs);
 export default router;
