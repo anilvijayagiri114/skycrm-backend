@@ -29,6 +29,15 @@ const createTransporter = () => {
 
 export const transporter = createTransporter();
 
+transporter.verify((err, success) => {
+  if (err) {
+    console.error("Transporter not ready:", err);
+  } else {
+    console.log("Transporter ready:", success);
+  }
+});
+
+
 // Email templates
 export const emailTemplates = {
   registration: (name, tempPassword) => ({
@@ -113,3 +122,4 @@ export const sendEmail = async (to, template, data = {}) => {
 };
 
 export default transporter;
+
