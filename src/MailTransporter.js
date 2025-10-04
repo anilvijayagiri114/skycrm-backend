@@ -19,11 +19,13 @@ const createTransporter = () => {
   
   // For development
   return nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 587,            // TLS port
+    secure: false,        // false for TLS, true for SSL (port 465)
     auth: {
-      user: process.env.MY_EMAIL,
-      pass: process.env.MY_PASSWORD,
-    }
+      user: process.env.MY_EMAIL,          // your Gmail
+      pass: process.env.MY_APP_PASSWORD,   // Gmail App Password, NOT your regular password
+    },  
   });
 };
 
@@ -122,4 +124,5 @@ export const sendEmail = async (to, template, data = {}) => {
 };
 
 export default transporter;
+
 
