@@ -58,6 +58,7 @@ export const login = async (req, res) => {
       lastLogout: null,
     });
 
+    req.logInfo = { message: "Login of user:" + user.email + " Successful" };
     // Send response
     res.json({
       token,
@@ -71,11 +72,13 @@ export const login = async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
+    req.logInfo = { error: "Login failed: Error occured is - " + error };
     res.status(500).json({ error: "An error occurred during login. Please try again." });
   }
 };
 
 export const logout = async (req, res) => {
+  req.shouldLog = true;
   const userId = req.user.userId;
   const io = getIO();
   try {
@@ -85,14 +88,19 @@ export const logout = async (req, res) => {
       { new: true }
     );
     io.emit("userStatusChange", { _id: userId, lastLogout: new Date() });
-    return res.json({ message: "Logged out successfully" });
+    return res.json({
+      message: "Logout of user:" + req.user.email + " successful",
+    });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: "Something went wrong" });
+    return res
+      .status(500)
+      .json({ error: "Logout failed: Error occured is - " + err });
   }
 };
 
 export const register = async (req, res) => {
+  req.shouldLog = true;
   const { name, email, roleName } = req.body;
   let { phone } = req.body;
   phone = phone?.trim();
@@ -100,9 +108,12 @@ export const register = async (req, res) => {
   if (!role) return res.status(400).json({ error: "Invalid role" });
   const exists = await User.findOne({ email });
   if (exists)
-    return res.status(400).json({ error: "Email already registered" });
+    return res
+      .status(400)
+      .json({ error: "Email " + email + " already registered" });
   const tempPassword = generateRandomPassword() || process.env.DEFAULTPASSWORD;
   const passwordHash = await bcrypt.hash(tempPassword, 10);
+  try{
   const user = await User.create({
     name,
     email,
@@ -119,22 +130,28 @@ export const register = async (req, res) => {
 
       console.log("Nodemailer result"+res);
       
-      return res.status(201).json({ 
-        id: user._id, 
-        message: "User created and email sent" 
-      });
+      return res.status(201).json({
+          id: user._id,
+          message: "User " + user.email + " created and email sent",
+        });
     } catch (error) {
       console.error('Email sending failed:', error);
       return res.status(201).json({
-        id: user._id,
-        message: "User created but email failed",
-        error: error.message
-      });
+          id: user._id,
+          message: "User " + user.email + " created but email failed",
+          error: error.message,
+        });
     }
+  }
+}catch (err) {
+    return res.status(500).json({
+      error: "User " + email + " creation failed: Error occured is - " + err,
+    });
   }
 };
 
 export const resetPassword = async (req, res) => {
+  req.shouldLog = true;
   const { email, role, newPassword } = req.body;
   try {
     const user = await User.findOne({ email, role });
@@ -144,11 +161,14 @@ export const resetPassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.passwordHash = hashedPassword;
     await user.save();
-    res.status(200).json({ message: "Password updated successfully" });
-  } catch (error) {
     res
-      .status(500)
-      .json({ message: "Error updating password", error: error.message });
+      .status(200)
+      .json({ message: "Password of user " + email + " updated successfully" });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error in updating user " + email + " password",
+      error: error.message,
+    });
   }
 };
 export const changePassword = async (req, res) => {
@@ -189,13 +209,29 @@ export const changePassword = async (req, res) => {
   if (!user.defaultPasswordChanged) {
     user.defaultPasswordChanged = true;
   }
-  await user.save();
-  res.json({ message: "Password updated successfully" });
+  try {
+    await user.save();
+    req.logInfo = {
+      message: "Password updation of user " + user.email + " successful",
+      target: userId,
+    };
+    res.json({ message: "Password updation successful" });
+  } catch (err) {
+    req.logInfo = {
+      error:
+        "Password change of user " +
+        user.email +
+        " unsuccessful: Error - " +
+        err,
+    };
+    res.json({ error: "Password change unsuccessful: Error - " + err });
+  }
 };
 // ...existing code...
 
 // OTP email endpoint
 export const sendRecoveryEmail = async (req, res) => {
+  req.shouldLog = true;
   const { recipient_email, OTP } = req.body;
   if (!recipient_email || !OTP) {
     return res.status(400).json({ message: "Email and OTP required" });
@@ -214,12 +250,11 @@ export const sendRecoveryEmail = async (req, res) => {
       resetUrl: process.env.FRONTEND_URL || 'http://localhost:5173'
     });
 
-    res.json({ message: "OTP sent" });
+    res.json({ message: "OTP sent to "+recipient_email+" for account recovery" });
   } catch (err) {
-    console.error('Failed to send recovery email:', err);
-    res.status(500).json({ 
-      message: "Failed to send email", 
-      error: err.message 
+    console.error('Failed to send recovery email: ', err);
+    res.status(500).json({
+      error: `Failed to send recovery email to ${recipient_email}. Error occured: ${err.message}` ;
     });
   }
 };
@@ -465,10 +500,16 @@ export const updateUserDetails = async (req, res) => {
     ).populate("role", "name");
 
     if (!updatedUser) {
+      req.logInfo = { error: "User not found", target: email };
       return res.status(404).json({ error: "User not found" });
     }
 
     const teams = await checkRoleAndUpdateDetails(user, roleName, status);
+
+    req.logInfo = {
+      message: `User updated with ${updatedUser.name}, ${updatedUser.email}, ${updatedUser.status}, ${updatedUser.phone}`,
+      target: email,
+    };
 
     res.json({
       _id: updatedUser._id,
@@ -481,8 +522,12 @@ export const updateUserDetails = async (req, res) => {
       lastLogin: updatedUser.lastLogin,
       lastLogout: updatedUser.lastLogout,
     });
-  } catch (error) {
-    console.error("Error updating user details:", error);
+  } catch (err) {
+    console.error("Error updating user details:", err);
+    req.logInfo = {
+      error: "Failed to update user details: Error - " + err,
+      target: email,
+    };
     res.status(500).json({ error: "Failed to update user details" });
   }
 };
@@ -504,6 +549,10 @@ const checkRoleAndUpdateDetails = async (user, roleName, status) => {
     });
 
     if (!adminUser) {
+      req.logInfo = {
+        error:
+          "No Admin user found to allocate teams under manager:" + user.email,
+      };
       console.log("No Admin user found!");
       return;
     }
@@ -514,27 +563,54 @@ const checkRoleAndUpdateDetails = async (user, roleName, status) => {
         { new: true }
       );
     }
+    req.logInfo = {
+      message:
+        "Teams under manager: " +
+        user.email +
+        " are now allocated to Admin: " +
+        adminUser.email,
+    };
     console.log("Teams updated with Admin as manager");
   }
 
   if (roleName === "Sales Team Lead" && status === "inactive") {
-    console.log("In team lead");
-    for (const team of teams) {
-      await Team.findByIdAndUpdate(
-        team._id,
-        { lead: null, $pull: { members: user?._id } },
-        { new: true }
-      );
+    try {
+      for (const team of teams) {
+        await Team.findByIdAndUpdate(
+          team._id,
+          { lead: null, $pull: { members: user?._id } },
+          { new: true }
+        );
+      }
+      req.logInfo = {
+        message: "User " + user.email + " successfully removed from team",
+      };
+    } catch (err) {
+      req.logInfo = {
+        error: "User: "+user.email + " removal from team is unsuccessful. Error: "+err,
+        target: user.email,
+      };
+      console.log("User removal from team is unsuccessful");
     }
   }
 
   if (roleName === "Sales Representatives" && status === "inactive") {
-    for (const team of teams) {
-      await Team.findByIdAndUpdate(
-        team._id,
-        { $pull: { members: user?._id } },
-        { new: true }
-      );
+    try {
+      for (const team of teams) {
+        await Team.findByIdAndUpdate(
+          team._id,
+          { $pull: { members: user?._id } },
+          { new: true }
+        );
+      }
+      req.logInfo = {
+        message: "User " + user.email + " successfully removed from team",
+      };
+    } catch (err) {
+      req.logInfo = {
+        error: "User: "+user.email + " removal from team is unsuccessful. Error: "+err,
+        target: user.email,
+      };
     }
   }
 
@@ -550,14 +626,23 @@ export const deleteUser = async (req, res) => {
     await checkRoleAndUpdateDetails(user, user.roleName, user.status);
     const deletedUser = await User.findByIdAndDelete(user._id);
     if (!deletedUser) {
+      req.logInfo = {
+        error: "User deletion unsuccessful: User not found",
+        target: user.email,
+      };
       return res.status(404).json({ error: "User not found" });
     }
+    req.logInfo = { message: "User " + user.email + " deleted successfully" };
     return res.status(200).json({
       message: "User deleted successfully",
       deletedUser,
     });
   } catch (error) {
     console.error("Error deleting user:", error);
+    req.logInfo = {
+      error:
+        "Error in deleting user " + user.email + ". Error occured is: " + error,
+    };
     return res.status(500).json({ error: "Internal server error" });
   }
 };
