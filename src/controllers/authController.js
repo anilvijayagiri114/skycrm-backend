@@ -504,7 +504,7 @@ export const updateUserDetails = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const teams = await checkRoleAndUpdateDetails(user, roleName, status);
+    const teams = await checkRoleAndUpdateDetails(user, roleName, status, req);
 
     req.logInfo = {
       message: `User updated with ${updatedUser.name}, ${updatedUser.email}, ${updatedUser.status}, ${updatedUser.phone}`,
@@ -532,7 +532,7 @@ export const updateUserDetails = async (req, res) => {
   }
 };
 
-const checkRoleAndUpdateDetails = async (user, roleName, status) => {
+const checkRoleAndUpdateDetails = async (user, roleName, status, req) => {
   let teamFilter = {};
   if (roleName === "Sales Manager") {
     teamFilter = { manager: user._id };
@@ -623,7 +623,7 @@ export const deleteUser = async (req, res) => {
     if (!user || !user._id) {
       return res.status(400).json({ error: "User ID is required" });
     }
-    await checkRoleAndUpdateDetails(user, user.roleName, user.status);
+    await checkRoleAndUpdateDetails(user, user.roleName, user.status, req);
     const deletedUser = await User.findByIdAndDelete(user._id);
     if (!deletedUser) {
       req.logInfo = {
