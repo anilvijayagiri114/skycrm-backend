@@ -254,7 +254,7 @@ export const sendRecoveryEmail = async (req, res) => {
   } catch (err) {
     console.error('Failed to send recovery email: ', err);
     res.status(500).json({
-      error: `Failed to send recovery email to ${recipient_email}. Error occured: ${err.message}` ;
+      error: `Failed to send recovery email to ${recipient_email}. Error occured: ${err.message}`,
     });
   }
 };
