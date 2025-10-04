@@ -161,7 +161,6 @@ export const changeStatus = async (req, res) => {
   lead.history.push({ status: status._id, by: req.user.userId, at: new Date() });
   if (note) lead.notes.push(note);
   await lead.save();
-  await lead.save();
   const populated = await Lead.findById(lead._id).populate("status");
   res.json({
     populated,
