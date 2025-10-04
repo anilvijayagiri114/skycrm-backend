@@ -69,6 +69,7 @@ export const login = async (req, res) => {
         roleName: user.role.name,
         defaultPasswordChanged: user.defaultPasswordChanged,
       },
+      message: "Login of user:" + user.email + " Successful",
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -254,6 +255,7 @@ export const sendRecoveryEmail = async (req, res) => {
 
     res.json({ message: "OTP sent to "+recipient_email+" for account recovery" });
   } catch (err) {
+    
     console.error('Failed to send recovery email: ', err);
     res.status(500).json({
       error: `Failed to send recovery email to ${recipient_email}. Error occured: ${err.message}`,
