@@ -107,7 +107,7 @@ export const createLead = async (req, res) => {
   const populated = await Lead.findById(doc._id).populate('status').populate('assignedTo','name email').populate('teamId','name lead');
   res
     .status(201)
-    .json({ populated, message: "Lead " + email + " created successfully"
+    .json({ populated, message: "Lead " + email + " created successfully"});
 };
 
 export const updateLead = async (req, res) => {
