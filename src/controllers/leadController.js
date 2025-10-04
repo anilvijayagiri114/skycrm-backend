@@ -68,6 +68,7 @@ export const getLead = async (req, res) => {
 };
 
 export const createLead = async (req, res) => {
+  req.shouldLog = true;
   const { name, phone, email, city, source, assignedTo, teamId, statusName } = req.body;
   // Check for duplicate by BOTH email and phone
   let duplicate = null;
@@ -75,7 +76,10 @@ export const createLead = async (req, res) => {
     duplicate = await Lead.findOne({ email: email, phone: phone });
   }
   if (duplicate) {
-    return res.status(400).json({ error: 'Lead already existed' });
+    return res.status(400).json({
+      error: "Lead creation unsuccessful. Lead already existed",
+      target: email,
+    });
   }
   // Always use 'New' status if not provided
   let status = null;
@@ -101,24 +105,47 @@ export const createLead = async (req, res) => {
   });
   // Return the populated lead for frontend
   const populated = await Lead.findById(doc._id).populate('status').populate('assignedTo','name email').populate('teamId','name lead');
-  res.status(201).json(populated);
+  res
+    .status(201)
+    .json({ populated, message: "Lead " + email + " created successfully"
 };
 
 export const updateLead = async (req, res) => {
+  req.shouldLog = true;
   const role = req.user.roleName;
   let updates = { ...req.body };
   delete updates.history;
   delete updates.status;
-  if (!(role === 'Admin' || role === 'Sales Manager' || role === 'Sales Manager' || role === 'Sales Team Lead')) {
+  if (!(role === 'Admin' || role === 'Sales Manager' || role === 'Sales Representatives' || role === 'Sales Team Lead')) {
     // Only allow city update for other roles
     updates = { city: req.body.city };
   }
-  const lead = await Lead.findByIdAndUpdate(req.params.id, updates, { new: true });
-  if (!lead) return res.status(404).json({ error: 'Lead not found' });
-  res.json(lead);
+    const lead = await Lead.findByIdAndUpdate(req.params.id, updates, {
+    new: true,
+  }).populate([
+    { path: "assignedTo", select: "name" },
+    { path: "teamId", select: "name" },
+  ]);
+  if (!lead)
+    return res.status(404).json({
+      error: "Lead updation failed. Lead " + updates.email + " not found",
+    });
+  res.json({
+    lead,
+    message: `Lead ${lead.email} updated successfully. Updated details: 
+    Name: ${lead.name}
+    Phone: ${lead.phone}
+    City: ${lead.city}
+    Source: ${lead.source}
+    Status: ${lead.status}
+    Assigned to: ${lead.assignedTo?.name || "Not Assigned"}
+    Team: ${lead.teamId?.name || "No Team"}`,
+    target: lead.email,
+  });
 };
 
 export const changeStatus = async (req, res) => {
+  req.shouldLog = true;
   console.log('changeStatus called by user:', req.user);
   const { statusName, note } = req.body;
   const lead = await Lead.findById(req.params.id);
@@ -134,8 +161,12 @@ export const changeStatus = async (req, res) => {
   lead.history.push({ status: status._id, by: req.user.userId, at: new Date() });
   if (note) lead.notes.push(note);
   await lead.save();
-  const populated = await Lead.findById(lead._id).populate('status');
-  res.json(populated);
+  await lead.save();
+  const populated = await Lead.findById(lead._id).populate("status");
+  res.json({
+    populated,
+    message: `Lead ${lead.email} status changed successfully to ${populated.status.name}`,
+  });
 };
 
 export const addNote = async (req, res) => {
@@ -166,6 +197,7 @@ export const listFollowUps = async (req, res) => {
 };
 
 export const uploadAttachment = async (req, res) => {
+  req.shouldLog = true;
   if (!req.file) return res.status(400).json({ error: 'No file' });
   const url = `/uploads/${req.file.filename}`;
   const doc = await (await import('../models/Attachment.js')).default.create({
@@ -234,9 +266,16 @@ export const importLeads = async (req, res) => {
     }
 
     const inserted = await Lead.insertMany(rows, { ordered: false });
+    req.logInfo = {
+      message:
+        "Leads imported successfully from the file:" + req.file.originalname,
+    };
     res.status(201).json({ inserted: inserted.length, skipped: errors.length, errors });
   } catch (e) {
     console.error('Import failed:', e);
+    req.logInfo = {
+      error: "Leads import failed from the file:" + req.file.originalname,
+    };
     res.status(500).json({ error: 'Import failed' });
   }
 };
@@ -332,6 +371,9 @@ export const bulkAssignLeads = async (req, res) => {
     team.leadsAssigned.push(...leadIds);
     await team.save();
 
+    req.logInfo = {
+      message: `${leadCount} leads assigned to team "${team.name}"`,
+    };
     // ✅ Response
     res.json({
       success: true,
@@ -346,6 +388,7 @@ export const bulkAssignLeads = async (req, res) => {
 
   } catch (error) {
     console.error('Bulk assignment failed:', error);
+    req.logInfo = { error: "Failed to assign leads" };
     res.status(500).json({ error: 'Failed to assign leads' });
   }
 };
