@@ -7,6 +7,7 @@ import { listLeads, getLead, createLead, updateLead, changeStatus, addNote, crea
 const router = Router();
 
 router.get('/', authRequired, listLeads);
+router.get('/paginationLeadsList', authRequired, listLeads);
 router.get('/:id', authRequired, getLead);
 router.post('/', authRequired, permit('Admin','Sales Manager'), createLead);
 router.put('/:id', authRequired, updateLead);
