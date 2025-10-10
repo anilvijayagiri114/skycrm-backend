@@ -18,6 +18,7 @@ router.post('/logout',authRequired, logout);
 router.post('/reset_password', resetPassword);
 router.post('/register', authRequired, permit('Admin','Sales Manager'), register);
 router.get('/users', authRequired, permit('Admin','Sales Manager'), listUsers);
+router.get('/users/paginationUsersList',authRequired, permit('Admin','Sales Manager'), listUsers);
 router.post('/change-password', authRequired, changePassword);
 router.post('/usersByRole', authRequired, permit('Admin'), getUsersByRole);
 router.post('/getUserDetails', authRequired, permit('Admin'), getUserDetails);
