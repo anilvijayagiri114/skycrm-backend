@@ -21,32 +21,89 @@ const canSeeLead = (req, lead) => {
   return false;
 };
 
-export const listLeads = async (req, res) => {
-  const role = req.user.roleName;
-  const { status, q, assignedTo } = req.query;
-  const filter = {};
-  if (status) {
-    const st = await Status.findOne({ name: status });
-    if (st) filter.status = st._id;
-  }
-  if (q) {
-    filter.$or = [
-      { name: new RegExp(q, 'i') },
-      { phone: new RegExp(q, 'i') },
-      { email: new RegExp(q, 'i') }
-    ];
-  }
-  // Team Lead and Sales Rep should see all leads, same as Manager
-// Helper to get Sales Manager userId
-async function getSalesManagerUserId() {
-  const salesManager = await (await import('../models/User.js')).default.findOne({ roleName: 'Sales Manager' });
-  return salesManager?._id;
-}
-  if (assignedTo === 'me') filter.assignedTo = req.user.userId;
+// export const listLeads = async (req, res) => {
+//   const role = req.user.roleName;
+//   const { status, q, assignedTo } = req.query;
+//   const filter = {};
+//   if (status) {
+//     const st = await Status.findOne({ name: status });
+//     if (st) filter.status = st._id;
+//   }
+//   if (q) {
+//     filter.$or = [
+//       { name: new RegExp(q, 'i') },
+//       { phone: new RegExp(q, 'i') },
+//       { email: new RegExp(q, 'i') }
+//     ];
+//   }
+//   // Team Lead and Sales Rep should see all leads, same as Manager
+// // Helper to get Sales Manager userId
+// async function getSalesManagerUserId() {
+//   const salesManager = await (await import('../models/User.js')).default.findOne({ roleName: 'Sales Manager' });
+//   return salesManager?._id;
+// }
+//   if (assignedTo === 'me') filter.assignedTo = req.user.userId;
 
-  const leads = await Lead.find(filter).populate('status').populate('assignedTo','name email').populate('teamId','name lead');
-  // No filtering: all roles see all leads
-  res.json(leads);
+//   const leads = await Lead.find(filter).populate('status').populate('assignedTo','name email').populate('teamId','name lead');
+//   // No filtering: all roles see all leads
+//   res.json(leads);
+// };
+
+export const listLeads = async (req, res) => {
+  try {
+    const role = req.user.roleName;
+    const currentRoute = req.route.path;
+    console.log(currentRoute);
+    const { status, q, assignedTo, page = 1, limit = 10 } = req.query;
+    const filter = {};
+    if (status) {
+      const st = await Status.findOne({ name: status });
+      if (st) filter.status = st._id;
+    }
+    if (q) {
+      filter.$or = [
+        { name: new RegExp(q, "i") },
+        { phone: new RegExp(q, "i") },
+        { email: new RegExp(q, "i") },
+      ];
+    }
+    // Team Lead and Sales Rep should see all leads, same as Manager
+    // Helper to get Sales Manager userId
+    async function getSalesManagerUserId() {
+      const salesManager = await (
+        await import("../models/User.js")
+      ).default.findOne({ roleName: "Sales Manager" });
+      return salesManager?._id;
+    }
+    if (assignedTo === "me") filter.assignedTo = req.user.userId;
+
+    if (currentRoute === "/") {
+      const leads = await Lead.find(filter)
+        .populate("status")
+        .populate("assignedTo", "name email")
+        .populate("teamId", "name lead");
+      // No filtering: all roles see all leads
+      res.json(leads);
+    } else {
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      const totalLeads = await Lead.countDocuments(filter);
+
+      const leads = await Lead.find(filter)
+        .populate("status")
+        .populate("assignedTo", "name email")
+        .populate("teamId", "name lead")
+        .skip(skip)
+        .limit(parseInt(limit));
+
+      res.json({
+        leads,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(totalLeads / limit),
+        totalLeads,
+      });
+    }
+  } catch (err) {}
 };
 
 export const getLead = async (req, res) => {
