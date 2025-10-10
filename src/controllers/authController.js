@@ -299,11 +299,54 @@ const generateRandomPassword = (length = 8) => {
   return passwordArray.map((b) => charset[b % charset.length]).join("");
 };
 
+// export const listUsers = async (req, res) => {
+//   try {
+//     const users = await User.find().populate("role", "name");
+//     res.json(
+//       users.map((u) => ({
+//         _id: u._id,
+//         name: u.name,
+//         email: u.email,
+//         roleName: u.role?.name,
+//         phone: u.phone,
+//         status: u.status,
+//         lastLogin: u.lastLogin,
+//         lastLogout: u.lastLogout,
+//       }))
+//     );
+//   } catch (error) {
+//     console.error("Error fetching users:", error);
+//     res.status(500).json({ error: "Failed to fetch users" });
+//   }
+// };
 export const listUsers = async (req, res) => {
   try {
-    const users = await User.find().populate("role", "name");
-    res.json(
-      users.map((u) => ({
+    const currentRoute = req.route.path;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    if (currentRoute === "/users") {
+      const users = await User.find().populate("role", "name");
+      res.json(
+        users.map((u) => ({
+          _id: u._id,
+          name: u.name,
+          email: u.email,
+          roleName: u.role?.name,
+          phone: u.phone,
+          status: u.status,
+          lastLogin: u.lastLogin,
+          lastLogout: u.lastLogout,
+        }))
+      );
+    } else {
+      const users = await User.find()
+        .populate("role", "name")
+        .skip(skip)
+        .limit(limit);
+      const totalUsers = await User.countDocuments();
+      const formattedUsers = users.map((u) => ({
         _id: u._id,
         name: u.name,
         email: u.email,
@@ -312,11 +355,17 @@ export const listUsers = async (req, res) => {
         status: u.status,
         lastLogin: u.lastLogin,
         lastLogout: u.lastLogout,
-      }))
-    );
-  } catch (error) {
-    console.error("Error fetching users:", error);
-    res.status(500).json({ error: "Failed to fetch users" });
+      }));
+      res.json({
+        totalUsers,
+        currentPage: page,
+        totalPages: Math.ceil(totalUsers / limit),
+        users: formattedUsers,
+      });
+    }
+  } catch (err) {
+    console.error("Error fetching paginated users:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 
