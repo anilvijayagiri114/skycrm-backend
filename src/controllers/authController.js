@@ -239,34 +239,50 @@ export const changePassword = async (req, res) => {
 // ...existing code...
 
 // OTP email endpoint
+let recoveryEmailOTP = {};
 export const sendRecoveryEmail = async (req, res) => {
   req.shouldLog = true;
-  const { recipient_email, OTP } = req.body;
-  if (!recipient_email || !OTP) {
-    return res.status(400).json({ message: "Email and OTP required" });
+  const OTP = Math.floor(Math.random() * 9000 + 1000).toString();
+  const { recipient_email } = req.body;
+  if (!recipient_email) {
+    return res.status(400).json({ message: "Email required" });
   }
 
   try {
     // Find user to get their name
-    const user = await User.findOne({ email: recipient_email });       //O(log n)
+    const user = await User.findOne({ email: recipient_email }); //O(log n)
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    await sendEmail(recipient_email, 'forgotPassword', {
+    await sendEmail(recipient_email, "forgotPassword", {
       name: user.name,
       resetToken: OTP,
-      resetUrl: process.env.FRONTEND_URL || 'http://localhost:5173'
+      resetUrl: process.env.FRONTEND_URL || "http://localhost:5173",
     });
-
-    res.json({ message: "OTP sent to "+recipient_email+" for account recovery" });
-  } catch (err) {
     
-    console.error('Failed to send recovery email: ', err);
+    recoveryEmailOTP[recipient_email] = await bcrypt.hash(OTP,10);
+    res.json({
+      message: "OTP sent to " + recipient_email + " for account recovery",
+    });
+  } catch (err) {
+    console.error("Failed to send recovery email: ", err);
     res.status(500).json({
       error: `Failed to send recovery email to ${recipient_email}. Error occured: ${err.message}`,
     });
   }
+};
+
+export const verifyPasswordRecoveryOTP = async (req, res) => {
+   const {OTP, recipient_email} = req.body;
+   const isMatch = await bcrypt.compare(OTP, recoveryEmailOTP[recipient_email]);
+   if(isMatch){
+    res.json({message:"OTP verified successfully"});
+    recoveryEmailOTP = {};
+   }
+   else{
+    res.status(400).json({error:"Invalid OTP"});
+   }
 };
 
 // export const login = async (req, res) => {
