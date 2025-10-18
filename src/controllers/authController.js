@@ -125,7 +125,13 @@ export const register = async (req, res) => {
       .json({ error: "Email " + email + " already registered" });
   const tempPassword = generateRandomPassword() || process.env.DEFAULTPASSWORD;
   const passwordHash = await bcrypt.hash(tempPassword, 10);
-  try {
+    try {
+    const maxRetries = 3;
+    for (let i = 0; i < maxRetries; i++) {
+      await sendEmail(email, "registration", { name, tempPassword });
+      break;
+    }
+
     const user = await User.create({
       name,
       email,
@@ -133,28 +139,20 @@ export const register = async (req, res) => {
       phone,
       role: role._id,
     });
+
     if (user) {
-      try {
-        await sendEmail(email, "registration", {
-          name,
-          tempPassword,
-        });
-        req.logInfo={message: "User " + user.email + " created and email sent"}
-        return res.status(201).json({
-          id: user._id,
-          message: "User " + user.email + " created and email sent"
-        });
-      } catch (error) {
-        req.logInfo={message: "User " + user.email + " created but email failed", error: error.message}
-        return res.status(201).json({
-          id: user._id,
-          message: "User " + user.email + " created but email failed",
-          error: error.message,
-        });
-      }
+      req.logInfo = {
+        message: "User " + user.email + " created and email sent",
+      };
+      return res.status(201).json({
+        id: user._id,
+        message: "User " + user.email + " created and email sent",
+      });
     }
   } catch (err) {
-    req.logInfo={error:`User ${email} creation failed: Error occured is- ${err}`}
+    req.logInfo = {
+      error: `User ${email} creation failed: Error occured is- ${err}`,
+    };
     return res.status(500).json({
       error: "User " + email + " creation failed: Error occured is - " + err,
     });
