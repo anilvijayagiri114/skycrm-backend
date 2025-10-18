@@ -169,6 +169,7 @@ export const resetPassword = async (req, res) => {
     }
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.passwordHash = hashedPassword;
+    user.defaultPasswordChanged = true;
     await user.save();
     res
       .status(200)
