@@ -13,6 +13,7 @@ import statusRoutes from './routes/statuses.js';
 import leadRoutes from './routes/leads.js';
 import teamRoutes from './routes/team.js';
 import statsRoutes from './routes/stats.js';
+import userRoutes from "./routes/users.js"
 import { loggerMiddleware } from './middleware/loggerMiddleware.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -65,6 +66,7 @@ app.use('/api/statuses', statusRoutes);
 app.use('/api/leads', leadRoutes);
 app.use('/api/team', teamRoutes);
 app.use('/api/stats', statsRoutes);
+app.use("/api/users",userRoutes);
 
 // 404
 // API 404 handler
