@@ -101,48 +101,60 @@ export const logout = async (req, res) => {
 };
 
 export const register = async (req, res) => {
-  req.shouldLog = true;
   const { name, email, roleName } = req.body;
   let { phone } = req.body;
   phone = phone?.trim();
-  const role = await Role.findOne({ name: roleName });  //O(1)
+  if (!/^[a-zA-Z\s]+$/.test(name)) {
+    return res.status(400).json({error:"Name should contain only alphabets"})
+  }
+
+  if (!/^\d{1,10}$/.test(phone)) {
+    return res.status(400).json({error:"Number must be 1-10 digits only"});
+  }
+
+  if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|in|net|org|co)$/.test(email)) {
+    return res.status(400).json({error:"Invalid email format"});
+  }
+
+  const role = await Role.findOne({ name: roleName }); //O(1)
   if (!role) return res.status(400).json({ error: "Invalid role" });
-  const exists = await User.findOne({ email });      //O(log n)
+  const exists = await User.findOne({ email }); //O(log n)
   if (exists)
     return res
       .status(400)
       .json({ error: "Email " + email + " already registered" });
   const tempPassword = generateRandomPassword() || process.env.DEFAULTPASSWORD;
   const passwordHash = await bcrypt.hash(tempPassword, 10);
-  try{
-  const user = await User.create({
-    name,
-    email,
-    passwordHash,
-    phone,
-    role: role._id,
-  });
-  if (user) {
-    try {
-      await sendEmail(email, 'registration', { 
-        name, 
-        tempPassword 
-      });
-      
-      return res.status(201).json({
-          id: user._id,
-          message: "User " + user.email + " created and email sent",
+  try {
+    const user = await User.create({
+      name,
+      email,
+      passwordHash,
+      phone,
+      role: role._id,
+    });
+    if (user) {
+      try {
+        await sendEmail(email, "registration", {
+          name,
+          tempPassword,
         });
-    } catch (error) {
-      console.error('Email sending failed:', error);
-      return res.status(201).json({
+        req.logInfo={message: "User " + user.email + " created and email sent"}
+        return res.status(201).json({
+          id: user._id,
+          message: "User " + user.email + " created and email sent"
+        });
+      } catch (error) {
+        req.logInfo={message: "User " + user.email + " created but email failed", error: error.message}
+        return res.status(201).json({
           id: user._id,
           message: "User " + user.email + " created but email failed",
           error: error.message,
         });
+      }
     }
-  }
-}catch (err) {
+  } catch (err) {
+    req.logInfo={error:`User ${email} creation failed: Error occured is- ${err}`}
     return res.status(500).json({
       error: "User " + email + " creation failed: Error occured is - " + err,
     });
