@@ -14,6 +14,7 @@ import roleRoutes from './routes/roles.js';
 import statusRoutes from './routes/statuses.js';
 import leadRoutes from './routes/leads.js';
 import teamRoutes from './routes/team.js';
+import userRoutes from './routes/users.js';
 import statsRoutes from './routes/stats.js';
 import { ensureDefaultAdmin } from './utils/setupDefaultUser.js';
 import { initSocket } from './serverSocket.js';
@@ -74,6 +75,8 @@ const createApp = () => {
   app.use('/api/leads', leadRoutes);
   app.use('/api/team', teamRoutes);
   app.use('/api/stats', statsRoutes);
+  app.use('/api/users', userRoutes);
+
 
   // API 404
   app.use('/api/*', (req, res) => res.status(404).json({ error: 'API endpoint not found' }));
