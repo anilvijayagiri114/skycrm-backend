@@ -6,7 +6,6 @@ import FollowUp from '../models/FollowUp.js';
 import Attachment from '../models/Attachment.js';
 import csv from 'csv-parser';
 import { Readable } from 'stream';
-import { clearRedisCache as clearCache } from '../middleware/redisCache.js';
 
 const canSeeLead = (req, lead) => {
   const role = req.user.roleName;
@@ -161,9 +160,6 @@ export const createLead = async (req, res) => {
     history: [{ status: status._id, by: req.user.userId, at: new Date() }],
     ...(createdBy && { createdBy })
   });
-// Invalidate the cache for the list of leads
-  clearCache('/api/leads');
-
   // Return the populated lead for frontend
   const populated = await Lead.findById(doc._id).populate('status').populate('assignedTo','name email').populate('teamId','name lead');
   res
@@ -191,9 +187,6 @@ export const updateLead = async (req, res) => {
     return res.status(404).json({
       error: "Lead updation failed. Lead " + updates.email + " not found",
     });
-
-    // Invalidate caches
-  clearCache('/api/leads'); // Clear list cache
   res.json({
     lead,
     message: `Lead ${lead.email} updated successfully. Updated details: 
@@ -229,8 +222,6 @@ export const changeStatus = async (req, res) => {
   lead.history.push({ status: status._id, by: req.user.userId, at: new Date() });
   if (note) lead.notes.push(note);
   await lead.save();
-  // Invalidate caches
-  clearCache('/api/leads'); // Clear list cache
   const populated = await Lead.findById(lead._id).populate("status");
   res.json({
     populated,
@@ -257,7 +248,6 @@ export const createFollowUp = async (req, res) => {
     dueAt,
     notes
   });
-  clearCache('/api/leads');
   res.status(201).json(fu);
 };
 
@@ -343,7 +333,6 @@ export const importLeads = async (req, res) => {
       message:
         "Leads imported successfully from the file:" + req.file.originalname,
     };
-    clearCache('/api/leads');
     res.status(201).json({ inserted: inserted.length, skipped: errors.length, errors });
   } catch (e) {
     console.error('Import failed:', e);
@@ -448,7 +437,6 @@ export const bulkAssignLeads = async (req, res) => {
     req.logInfo = {
       message: `${leadCount} leads assigned to team "${team.name}"`,
     };
-    clearCache('/api/leads');
     // ✅ Response
     res.json({
       success: true,

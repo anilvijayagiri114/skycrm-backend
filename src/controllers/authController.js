@@ -6,9 +6,6 @@ import Role from "../models/Role.js";
 import crypto from "crypto";
 import { getIO } from "../serverSocket.js";
 import { sendEmail } from "../MailTransporter.js";
-import Team from "../models/Team.js";
-import { getTeams } from "./teamController.js";
-import { getRedisClient } from "../config/redis.js";
 
 const signToken = (user) => {
   return jwt.sign(
@@ -26,8 +23,8 @@ const signToken = (user) => {
 
 export const login = async (req, res) => {
   try {
-    const { email, password,selectedRole} = req.body;
-    console.log("selecteedrole==============",selectedRole);
+    const { email, password } = req.body;
+    
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required" });
     }
@@ -36,25 +33,14 @@ export const login = async (req, res) => {
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
-    if (selectedRole && user.role.name !== selectedRole) {
-      return res.status(401).json({ error: "Invalid role for this user" });
-    }
+
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
-   
-    const token = signToken(user);
-    // ✅ Redis session
-  const redisClient = getRedisClient();
-  const sessionKey = `crm_sess:${user._id}`;
-  await redisClient.setEx(
-    sessionKey,
-    12 * 60 * 60, // 12 hours same as JWT expiry
-    JSON.stringify({ token, roleName: user.role.name, email: user.email })
-  );
 
     const io = getIO();
+    const token = signToken(user);
 
     // Update user's login status
     await User.findByIdAndUpdate(
@@ -93,21 +79,10 @@ export const login = async (req, res) => {
 };
 
 export const logout = async (req, res) => {
-  try {
   req.shouldLog = true;
   const userId = req.user.userId;
-  const email = req.user.email;
-  const redisClient = getRedisClient();
-  const sessionKey = `crm_sess:${userId}`;
-  await redisClient.del(sessionKey);
-  if (email) {
-    await redisClient.del(`rl:login:${email}`);
-  } else {
-    const ipKey = `rl:login:${req.ip}`;
-    await redisClient.del(ipKey);
-  }
   const io = getIO();
-
+  try {
     await User.findByIdAndUpdate(
       userId,
       { lastLogout: new Date() },
@@ -194,6 +169,7 @@ export const resetPassword = async (req, res) => {
     }
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.passwordHash = hashedPassword;
+    user.defaultPasswordChanged = true;
     await user.save();
     res
       .status(200)
@@ -264,34 +240,50 @@ export const changePassword = async (req, res) => {
 // ...existing code...
 
 // OTP email endpoint
+let recoveryEmailOTP = {};
 export const sendRecoveryEmail = async (req, res) => {
   req.shouldLog = true;
-  const { recipient_email, OTP } = req.body;
-  if (!recipient_email || !OTP) {
-    return res.status(400).json({ message: "Email and OTP required" });
+  const OTP = Math.floor(Math.random() * 9000 + 1000).toString();
+  const { recipient_email } = req.body;
+  if (!recipient_email) {
+    return res.status(400).json({ message: "Email required" });
   }
 
   try {
     // Find user to get their name
-    const user = await User.findOne({ email: recipient_email });       //O(log n)
+    const user = await User.findOne({ email: recipient_email }); //O(log n)
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    await sendEmail(recipient_email, 'forgotPassword', {
+    await sendEmail(recipient_email, "forgotPassword", {
       name: user.name,
       resetToken: OTP,
-      resetUrl: process.env.FRONTEND_URL || 'http://localhost:5173'
+      resetUrl: process.env.FRONTEND_URL || "http://localhost:5173",
     });
-
-    res.json({ message: "OTP sent to "+recipient_email+" for account recovery" });
-  } catch (err) {
     
-    console.error('Failed to send recovery email: ', err);
+    recoveryEmailOTP[recipient_email] = await bcrypt.hash(OTP,10);
+    res.json({
+      message: "OTP sent to " + recipient_email + " for account recovery",
+    });
+  } catch (err) {
+    console.error("Failed to send recovery email: ", err);
     res.status(500).json({
       error: `Failed to send recovery email to ${recipient_email}. Error occured: ${err.message}`,
     });
   }
+};
+
+export const verifyPasswordRecoveryOTP = async (req, res) => {
+   const {OTP, recipient_email} = req.body;
+   const isMatch = await bcrypt.compare(OTP, recoveryEmailOTP[recipient_email]);
+   if(isMatch){
+    res.json({message:"OTP verified successfully"});
+    recoveryEmailOTP = {};
+   }
+   else{
+    res.status(400).json({error:"Invalid OTP"});
+   }
 };
 
 // export const login = async (req, res) => {
@@ -332,273 +324,3 @@ const generateRandomPassword = (length = 8) => {
   return passwordArray.map((b) => charset[b % charset.length]).join("");
 };
 
-export const listUsers = async (req, res) => {
-  try {
-    const users = await User.find().populate("role", "name");
-    res.json(
-      users.map((u) => ({
-        _id: u._id,
-        name: u.name,
-        email: u.email,
-        roleName: u.role?.name,
-        phone: u.phone,
-        status: u.status,
-        lastLogin: u.lastLogin,
-        lastLogout: u.lastLogout,
-      }))
-    );
-  } catch (error) {
-    console.error("Error fetching users:", error);
-    res.status(500).json({ error: "Failed to fetch users" });
-  }
-};
-
-export const getUsersByRole = async (req, res) => {
-  try {
-    const { roleId } = req.body;
-    if (!roleId) {
-      return res.status(400).json({ error: "roleId is required" });
-    }
-
-    const users = await User.find({ role: roleId }).populate("role", "name");
-    if (!users || users.length === 0) {
-      return res.status(404).json({ error: "Users with given role not found" });
-    }
-
-    res.json(
-      users.map((u) => ({
-        _id: u._id,
-        name: u.name,
-        email: u.email,
-        roleName: u.role?.name,
-        phone: u.phone,
-        status: u.status,
-        lastLogin: u.lastLogin,
-        lastLogout: u.lastLogout,
-      }))
-    );
-  } catch (error) {
-    console.error("Error fetching users by role:", error);
-    res.status(500).json({ error: "Failed to fetch users by role" });
-  }
-};
-
-export const getUserDetails = async (req, res) => {
-  try {
-    const { user } = req.body;
-    if (!user || !user._id || !user.roleName) {
-      return res.status(400).json({ error: "Invalid user data" });
-    }
-
-    let teamFilter = {};
-    if (user.roleName === "Sales Manager") {
-      teamFilter = { manager: user._id };
-    } else if (user.roleName === "Sales Team Lead") {
-      teamFilter = { lead: user._id };
-    } else if (user.roleName === "Sales Representatives") {
-      teamFilter = { members: user._id };
-    }
-
-    const teams = await getTeams(teamFilter);
-
-    const userDetails = {
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      roleName: user.roleName,
-      status: user.status,
-      phone: user.phone,
-      teams: teams || [],
-      lastLogin: user.lastLogin,
-      lastLogout: user.lastLogout,
-    };
-
-    res.json({ user: userDetails });
-  } catch (error) {
-    console.error("Error fetching user details:", error);
-    res.status(500).json({ error: "Failed to fetch user details" });
-  }
-};
-
-
-export const updateUserDetails = async (req, res) => {
-  const { user } = req.body;
-  try {
-    if (!user || !user._id) {
-      return res.status(400).json({ error: "User ID is required" });
-    }
-
-    let { name, email, status, roleName, phone } = user;
-    name = name?.trim();
-    email = email?.trim().toLowerCase();
-    status = status?.trim();
-    phone = phone?.trim();
-
-    const updatedUser = await User.findByIdAndUpdate(
-      user._id,
-      { name, email, status, phone },
-      { new: true }
-    ).populate("role", "name");
-
-    if (!updatedUser) {
-      req.logInfo = { error: "User not found", target: email };
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    const teams = await checkRoleAndUpdateDetails(user, roleName, status, req);
-
-    req.logInfo = {
-      message: `User updated. Details : ${updatedUser.name}, ${updatedUser.email}, ${updatedUser.status}, ${updatedUser?.phone}`,
-      target: email,
-    };
-
-    res.json({
-      _id: updatedUser._id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-      status: updatedUser.status,
-      roleName: updatedUser.role?.name || "",
-      phone: updatedUser.phone,
-      teams: teams || [],
-      lastLogin: updatedUser.lastLogin,
-      lastLogout: updatedUser.lastLogout,
-    });
-  } catch (err) {
-    console.error("Error updating user details:", err);
-    req.logInfo = {
-      error: "Failed to update user details: Error - " + err,
-      target: email,
-    };
-    res.status(500).json({ error: "Failed to update user details" });
-  }
-};
-
-const checkRoleAndUpdateDetails = async (user, roleName, status, req) => {
-  let teamFilter = {};
-  if (roleName === "Sales Manager") {
-    teamFilter = { manager: user._id };
-  } else if (roleName === "Sales Team Lead") {
-    teamFilter = { lead: user._id };
-  } else if (roleName === "Sales Representatives") {
-    teamFilter = { members: user._id };
-  }
-  const teams = await getTeams(teamFilter);
-  if (roleName === "Sales Manager" && status === "inactive") {
-    const adminUser = await User.findOne().populate({
-      path: "role",
-      match: { name: "Admin" },
-    });
-
-    if (!adminUser) {
-      req.logInfo = {
-        error:
-          "No Admin user found to allocate teams under manager:" + user.email,
-      };
-      console.log("No Admin user found!");
-      return;
-    }
-    for (const team of teams) {
-      await Team.findByIdAndUpdate(
-        team._id,
-        { manager: adminUser._id },
-        { new: true }
-      );
-    }
-    req.logInfo = {
-      message:
-        "Teams under manager: " +
-        user.email +
-        " are now allocated to Admin: " +
-        adminUser.email,
-    };
-    console.log("Teams updated with Admin as manager");
-  }
-
-  if (roleName === "Sales Team Lead" && status === "inactive") {
-    try {
-      for (const team of teams) {
-        await Team.findByIdAndUpdate(
-          team._id,
-          { lead: null, $pull: { members: user?._id } },
-          { new: true }
-        );
-      }
-      req.logInfo = {
-        message: "User " + user.email + " successfully removed from team",
-      };
-    } catch (err) {
-      req.logInfo = {
-        error: "User: "+user.email + " removal from team is unsuccessful. Error: "+err,
-        target: user.email,
-      };
-      console.log("User removal from team is unsuccessful");
-    }
-  }
-
-  if (roleName === "Sales Representatives" && status === "inactive") {
-    try {
-      for (const team of teams) {
-        await Team.findByIdAndUpdate(
-          team._id,
-          { $pull: { members: user?._id } },
-          { new: true }
-        );
-      }
-      req.logInfo = {
-        message: "User " + user.email + " successfully removed from team",
-      };
-    } catch (err) {
-      req.logInfo = {
-        error: "User: "+user.email + " removal from team is unsuccessful. Error: "+err,
-        target: user.email,
-      };
-    }
-  }
-
-  return teams;
-};
-
-export const deleteUser = async (req, res) => {
-  const { user } = req.body;
-  try {
-    if (!user || !user._id) {
-      return res.status(400).json({ error: "User ID is required" });
-    }
-    await checkRoleAndUpdateDetails(user, user.roleName, user.status, req);
-    const deletedUser = await User.findByIdAndDelete(user._id);
-    if (!deletedUser) {
-      req.logInfo = {
-        error: "User deletion unsuccessful: User not found",
-        target: user.email,
-      };
-      return res.status(404).json({ error: "User not found" });
-    }
-    req.logInfo = { message: "User " + user.email + " deleted successfully" };
-    return res.status(200).json({
-      message: "User deleted successfully",
-      deletedUser,
-    });
-  } catch (error) {
-    console.error("Error deleting user:", error);
-    req.logInfo = {
-      error:
-        "Error in deleting user " + user.email + ". Error occured is: " + error,
-    };
-    return res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-export const refreshSession = async (req, res) => {
-  const userId = req.user.userId;
-  const newToken = signToken({ userId });
-  const redisClient = getRedisClient();
-
-  const sessionKey = `crm_sess:${userId}`;
-  await redisClient.setEx(
-    sessionKey,
-    12 * 60 * 60,
-    JSON.stringify({ token: newToken })
-  );
-
-  res.json({ token: newToken });
-};
