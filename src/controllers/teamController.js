@@ -171,7 +171,8 @@
 import Team from "../models/Team.js";
 import User from "../models/User.js";
 import Role from "../models/Role.js";
-
+import Lead from "../models/Lead.js";
+import { clearRedisCache as clearCache } from '../middleware/redisCache.js';
 export const createTeam = async (req, res) => {
   req.shouldLog = true;
   const { name, leadId, memberIds } = req.body;
@@ -188,6 +189,7 @@ export const createTeam = async (req, res) => {
       .populate("lead", "name email")
       .populate("manager", "name email")
       .populate("members", "name email");
+      clearCache('/api/team');
     res.status(201).json({
       populatedTeam,
       message: "Team: " + name + " created successfully",
@@ -297,6 +299,7 @@ export const addMembers = async (req, res) => {
       .json({ error: "Team with id " + id + " not found to add team members" });
   }
   const membersList = team.members.map((m) => m.name).join(", ");
+  clearCache('/api/team');
   res.json({
     team,
     message: `Team:${team.name} is added with ${memberIds.length} members. Team members are: ${membersList}`,
@@ -339,6 +342,7 @@ export const setLead = async (req, res) => {
   );
   if (!user) return res.status(404).json({ error: "User not found" });
 
+  clearCache('/api/team');
   res.json({
     team,
     message:
@@ -350,31 +354,59 @@ export const deleteTeam = async (req, res) => {
   req.shouldLog = true;
   try {
     const { id } = req.params;
-
-    const deletedTeam = await Team.findByIdAndDelete(id);
-
-    if (!deletedTeam) {
-      return res
-        .status(404)
-        .json({ error: "Team with id:" + id + " not found" });
+    // Step 1: Find team first (we need its leadsAssigned info)
+    const team = await Team.findById(id);
+    console.log("Deleting team:", team);
+    if (!team) {
+      return res.status(404).json({ error: "Team with id: " + id + " not found" });
+    }
+    
+    // Step 2: Clear leads related to this team
+    let leadsUpdated = false;
+    if (team.leadsAssigned && team.leadsAssigned.length > 0) {
+      await Lead.updateMany(
+        { _id: { $in: team.leadsAssigned } },
+        { $set: { teamId: null, assignedTo: null } }
+      );
+      leadsUpdated = true;
+      console.log("Cleared leads assigned to this team.", team.leadsAssigned);
+    } else {
+      // If there are no leads to update, consider it successful by default
+      leadsUpdated = true;
     }
 
-    if (deletedTeam.lead) {
-      const exTeamLeadId = deletedTeam.lead._id || deletedTeam.lead;
-      const salesRepRole = await Role.findOne({
-        name: "Sales Representatives",
-      });
+    // Step 3: If the team has a lead (Team Lead), reset their role
+    let leadRoleUpdated = false;
+    if (team.lead) {
+      const exTeamLeadId = team.lead._id || team.lead;
+      const salesRepRole = await Role.findOne({ name: "Sales Representatives" });
 
       if (salesRepRole) {
         await User.findByIdAndUpdate(exTeamLeadId, { role: salesRepRole._id });
+        leadRoleUpdated = true;
+      } else {
+        // Role not found, treat as failure
+        leadRoleUpdated = false;
       }
+    } else {
+      // No lead to update, consider successful by default
+      leadRoleUpdated = true;
     }
 
-    res.json({
-      message: "Team: " + deletedTeam.name + " deleted successfully",
-      deletedTeam,
-    });
+    // Step 4: Delete the team only if both updates succeeded
+    if (leadsUpdated && leadRoleUpdated) {
+      console.log("deleting tea,,,,,,,,,,,,,");
+      clearCache('/api/team');
+      const deletedTeam = await Team.findByIdAndDelete(id);
+      return res.json({
+        message: `Team: ${team.name} deleted successfully`,
+        deletedTeam,
+      });
+    } else {
+      return res.status(500).json({ error: "Failed to update leads or lead role, team not deleted" });
+    }
   } catch (error) {
+    console.error("Error deleting team:", error);
     res.status(500).json({ error: "Server error", details: error.message });
   }
 };
@@ -408,6 +440,7 @@ export const editTeam = async (req, res) => {
       { new: true }
     ).populate({ path: "members", select: "name email" });
     const membersList = updatedTeam.members.map((m) => m.name).join(", ");
+    clearCache('/api/team');
     res.status(200).json({
       message: `Team: ${currentTeam.name} updated successfully. Updated team details: Team name: ${updatedTeam.name}, Team members: ${membersList}`,
       updatedTeam,

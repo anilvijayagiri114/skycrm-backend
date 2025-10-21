@@ -10,6 +10,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import connectDB from './config/db.js';
 import authRoutes from './routes/auth.js';
+import sessionRoutes from './routes/session.js';
 import roleRoutes from './routes/roles.js';
 import statusRoutes from './routes/statuses.js';
 import leadRoutes from './routes/leads.js';
@@ -19,10 +20,14 @@ import statsRoutes from './routes/stats.js';
 import { ensureDefaultAdmin } from './utils/setupDefaultUser.js';
 import { initSocket } from './serverSocket.js';
 import { loggerMiddleware } from './middleware/loggerMiddleware.js';
+import { redisCacheMiddleware } from './middleware/redisCache.js';
+import { connectRedis } from './config/redis.js';
+import { createRateLimiter } from './utils/rateLimiter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+import { pendingLogoutMiddleware } from './middleware/pendingLogout.js';
 const PORT = process.env.PORT || 8000;
 
 const createApp = () => {
@@ -33,12 +38,25 @@ const createApp = () => {
   app.use(loggerMiddleware);
 
   // Rate limiting (only auth routes)
-  const limiter = rateLimit({
-    windowMs: process.env.NODE_ENV === 'production' ? 15 * 60 * 1000 : 1 * 60 * 1000,
-    max: process.env.NODE_ENV === 'production' ? 100 : 1000,
-    message: { error: 'Too many requests, please try again later.' }
+  // const limiter = rateLimit({
+  //   windowMs: process.env.NODE_ENV === 'production' ? 15 * 60 * 1000 : 1 * 60 * 1000,
+  //   max: process.env.NODE_ENV === 'production' ? 100 : 1000,
+  //   message: { error: 'Too many requests, please try again later.' }
+  // });
+
+  const loginLimiter = createRateLimiter({
+    prefix: "rl:login:",
+    windowMs: 1 * 60 * 1000, // 15 minutes
+    max: 5,
+    message: { error: "Too many login attempts. Try again later." },
+    keyGenerator: (req) => req.body.email || ipKeyGenerator(req), // ✅ email fallback, IP-safe
   });
 
+  const generalLimiter= createRateLimiter({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 60, // 60 requests per minute per IP
+    message: { error: 'Too many requests. Please slow down.' },
+  });
   // Connect DB will be done in start()
 
   // CORS
@@ -68,12 +86,19 @@ const createApp = () => {
   // Health
   app.get('/api/health', (req, res) => res.json({ ok: true, service: 'skycrm-backend' }));
 
+
+  app.use('/api/auth/login', loginLimiter);  // ⬅ Strict limiter for login
+  app.use('/api/auth/register', loginLimiter); 
   // Routes
-  app.use('/api/auth', limiter, authRoutes);
-  app.use('/api/roles', roleRoutes);
-  app.use('/api/statuses', statusRoutes);
-  app.use('/api/leads', leadRoutes);
-  app.use('/api/team', teamRoutes);
+  app.use('/api/auth', generalLimiter, authRoutes);
+  // Pending logout check middleware (should be before protected routes)
+  app.use(pendingLogoutMiddleware);
+  // Session management endpoints
+  app.use('/api/session', sessionRoutes);
+  app.use('/api/roles',redisCacheMiddleware,roleRoutes);
+  app.use('/api/statuses',redisCacheMiddleware, statusRoutes);
+   app.use('/api/leads', redisCacheMiddleware, leadRoutes);
+  app.use('/api/team',redisCacheMiddleware,teamRoutes);
   app.use('/api/stats', statsRoutes);
   app.use('/api/users', userRoutes);
 
@@ -103,6 +128,15 @@ const createApp = () => {
 
 const start = async () => {
   await connectDB();
+  
+  // Try to connect to Redis, but don't fail if it's not available
+  try {
+    await connectRedis();
+    console.log("✅ Redis connected successfully");
+  } catch (error) {
+    console.warn("⚠️ Redis connection failed, continuing without Redis:", error.message);
+  }
+  
   await ensureDefaultAdmin();
 
   const app = createApp();
