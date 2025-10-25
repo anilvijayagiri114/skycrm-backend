@@ -262,6 +262,9 @@ export const listTeams = async (req, res) => {
       filter = { members: req.user.userId };
       console.log('Filtering for Sales Rep:', req.user.userId);
     }
+    if (role === "Sales Manager") {
+      filter = { manager: req.user.userId };
+    }
     console.log('Applying filter:', filter);
 
     const teams = await getTeams(filter);
