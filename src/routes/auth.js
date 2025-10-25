@@ -6,6 +6,7 @@ import { resetPassword } from '../controllers/authController.js';
 import { login, register, changePassword, sendRecoveryEmail, logout, logoutBeacon, heartbeat, validateSession } from '../controllers/authController.js';
 import { authRequired, permit } from '../middleware/auth.js';
 import { listLogs } from '../controllers/logController.js';
+import { generateReport } from '../controllers/reportController.js';
 
 // ...existing code...
 
