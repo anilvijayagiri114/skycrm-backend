@@ -31,4 +31,5 @@ router.post('/reset_password', resetPassword);
 router.post('/register', authRequired, permit('Admin','Sales Manager'), register);
 router.post('/change-password', authRequired, changePassword);
 router.get('/logs',authRequired, permit('Admin','Sales Manager'), listLogs);
+router.get('/report',authRequired, permit("Sales Manager"), generateReport);
 export default router;
