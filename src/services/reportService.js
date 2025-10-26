@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer";
-console.log("Puppeteer executable path:", puppeteer.executablePath());
+
 const browser = await puppeteer.launch({
   headless: true
 });
