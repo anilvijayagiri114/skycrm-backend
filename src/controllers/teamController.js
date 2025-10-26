@@ -223,7 +223,15 @@ export const getTeams = async (filter) => {
   return Team.find(filter)
     .populate("lead", "name email")
     .populate("manager", "name email")
-    .populate("members", "name email");
+    .populate("members", "name email")
+    .populate({
+      path: "leadsAssigned",
+      select:"_id status",
+      populate: {
+        path: "status",
+        select: "name order" // assuming your Status model has name and color fields
+      }
+    });
 };
 
 // export const listTeams = async (req, res) => {
