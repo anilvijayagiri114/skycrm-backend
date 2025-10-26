@@ -4,11 +4,9 @@
   "type": "module",
   "main": "src/server.js",
   "scripts": {
-    "preinstall": "apt-get update && apt-get install -y chromium-browser",
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "seed": "node src/seed.js",
-    "postinstall": "npx puppeteer install"
   },
   "dependencies": {
     "@sendgrid/mail": "^8.1.6",
