@@ -232,6 +232,7 @@ export const changeStatus = async (req, res) => {
   // Invalidate caches
   clearCache('/api/leads'); // Clear list cache
   clearCache(`/api/leads/${lead._id}`);
+  clearCache('/api/leads?assignedTo=me');
   const populated = await Lead.findById(lead._id).populate("status");
   res.json({
     populated,
