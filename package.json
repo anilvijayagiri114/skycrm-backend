@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "seed": "node src/seed.js"
+    "seed": "node src/seed.js",
+    "postinstall": "npx puppeteer install"
   },
   "dependencies": {
     "@sendgrid/mail": "^8.1.6",
