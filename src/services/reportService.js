@@ -1,5 +1,10 @@
 import puppeteer from "puppeteer";
 console.log("Puppeteer executable path:", puppeteer.executablePath());
+const browser = await puppeteer.launch({
+  headless: true,
+  args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
+});
 
 export async function generateManagerReport(
   managerData,
@@ -288,10 +293,6 @@ page-break-inside: avoid;
   `;
 
   // ===== 6. Generate PDF =====
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
   const page = await browser.newPage();
   await page.setContent(htmlContent, { waitUntil: "networkidle0" });
 
