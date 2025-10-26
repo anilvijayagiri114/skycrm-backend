@@ -1,10 +1,10 @@
 import puppeteer from "puppeteer";
 console.log("Puppeteer executable path:", puppeteer.executablePath());
 const browser = await puppeteer.launch({
-  headless: true,
-  args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  executablePath: puppeteer.executablePath(),
+  executablePath: '/usr/bin/chromium-browser', 
+  headless: true
 });
+
 
 export async function generateManagerReport(
   managerData,
