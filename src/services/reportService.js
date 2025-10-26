@@ -1,4 +1,5 @@
 import puppeteer from "puppeteer";
+console.log("Puppeteer executable path:", puppeteer.executablePath());
 
 export async function generateManagerReport(
   managerData,
